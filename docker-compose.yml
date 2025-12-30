@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Frontend (Next.js PWA)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arche-frontend
+    ports:
+      - "3000:3000"  # Next.js dev server
+    volumes:
+      # Монтируем код для hot-reload
+      - .:/app
+      # Исключаем node_modules (используем из контейнера)
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true  # Для hot-reload в Docker
+    command: npm run dev
+    stdin_open: true
+    tty: true
+    networks:
+      - arche-network
+
+  # Backend (FastAPI) - добавим позже, когда будем интегрировать
+  # backend:
+  #   image: arche-backend:latest
+  #   container_name: arche-backend
+  #   ports:
+  #     - "8000:8000"
+  #   networks:
+  #     - arche-network
+
+networks:
+  arche-network:
+    driver: bridge
