@@ -1,11 +1,15 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Settings, Briefcase, Heart, Plus, Home, Grid3X3, MessageSquare, MoreHorizontal } from 'lucide-react';
+import { Settings, Briefcase, Heart, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { LiquidGlassTabBar } from '@/components/ui/LiquidGlassTabBar';
 
 export default function PathPage() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-32">
       {/* Header */}
@@ -247,9 +251,7 @@ export default function PathPage() {
         className="fixed bottom-28 left-6 right-6 z-20 mx-auto max-w-[430px]"
       >
         <Button
-          onClick={() => {
-            window.location.href = '/new-request';
-          }}
+          onClick={() => router.push('/new-request')}
           className="w-full rounded-xl bg-[#d4af37] py-6 text-black shadow-lg shadow-[#d4af37]/30 transition-transform hover:scale-[1.02] hover:bg-[#d4af37]"
         >
           <Plus className="mr-2 h-5 w-5" />
@@ -258,34 +260,7 @@ export default function PathPage() {
       </motion.div>
 
       {/* Tab Bar */}
-      <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-[430px] rounded-[24px] border border-white/10 bg-[#121212]/70 px-2 py-3 backdrop-blur-md">
-        <div className="flex items-center justify-around">
-          {[
-            { id: 'path', label: 'Путь', icon: Home, href: '/path' },
-            { id: 'matrix', label: 'Матрица', icon: Grid3X3, href: '/matrix' },
-            { id: 'history', label: 'Запросы', icon: MessageSquare, href: '/history' },
-            { id: 'more', label: 'Ещё', icon: MoreHorizontal, href: '/pricing' },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  window.location.href = tab.href;
-                }}
-                className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-colors ${
-                  tab.id === 'path'
-                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                    : 'text-white/50 hover:text-[#d4af37]'
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="text-[10px]">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <LiquidGlassTabBar />
     </div>
   );
 }
