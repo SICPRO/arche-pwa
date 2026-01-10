@@ -6,35 +6,58 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
+import { usersApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import { format } from 'date-fns';
 
 export default function DataInputPage() {
   const router = useRouter();
+  const refreshUser = useAuthStore((state) => state.refreshUser);
   
   // Состояния формы
-  const [birthDate, setBirthDate] = useState('');
+  const [birthDate, setBirthDate] = useState<Date | undefined>();
   const [birthTime, setBirthTime] = useState('');
   const [birthCity, setBirthCity] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [skipTime, setSkipTime] = useState(false);
+  
+  // Состояния загрузки
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // Валидация: дата, город и пол обязательны
   const isValid = birthDate && birthCity && gender !== null;
 
-  const handleSubmit = () => {
-    if (isValid) {
-      // TODO: Сохранение данных на бэкенд
-      // Данные для отправки:
-      const userData = {
-        birthDate,
-        birthTime: skipTime ? null : birthTime,
-        birthCity,
-        gender,
+  const handleSubmit = async () => {
+    if (!isValid || !birthDate) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Формируем данные для отправки
+      const data = {
+        birth_date: format(birthDate, 'yyyy-MM-dd'), // ISO формат
+        birth_time: skipTime ? undefined : birthTime || undefined,
+        birth_city: birthCity,
+        gender: gender,
       };
-      
-      console.log('User data:', userData);
-      
+
+      // Отправляем на бэкенд
+      await usersApi.saveBirthData(data);
+
+      console.log('✅ Birth data saved:', data);
+
+      // Обновляем пользователя в глобальном состоянии
+      await refreshUser();
+
       // Переход на тест личности
       router.push('/personality-test');
+    } catch (err: any) {
+      console.error('❌ Save birth data error:', err);
+      setError(err.response?.data?.detail || 'Ошибка при сохранении данных. Попробуйте ещё раз.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -52,12 +75,13 @@ export default function DataInputPage() {
 
       {/* Form */}
       <div className="flex-1 space-y-6">
-        {/* Пол (НОВОЕ) */}
+        {/* Пол */}
         <div>
           <Label className="mb-3 block text-[#e5e5e5]">Пол</Label>
           <div className="flex gap-3">
             <button
               onClick={() => setGender('male')}
+              disabled={isLoading}
               className={`flex-1 rounded-xl border-2 px-6 py-4 text-center transition-all ${
                 gender === 'male'
                   ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'
@@ -75,6 +99,7 @@ export default function DataInputPage() {
             
             <button
               onClick={() => setGender('female')}
+              disabled={isLoading}
               className={`flex-1 rounded-xl border-2 px-6 py-4 text-center transition-all ${
                 gender === 'female'
                   ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'
@@ -114,6 +139,7 @@ export default function DataInputPage() {
               type="time"
               value={birthTime}
               onChange={(e) => setBirthTime(e.target.value)}
+              disabled={isLoading}
               className="h-14 rounded-xl border-2 border-[#6b7280] bg-[#1a1a1a] px-4 text-[#e5e5e5] transition-all focus:border-[#d4af37] focus-visible:ring-0"
             />
             <p className="mt-2 text-sm text-[#d4af37]">
@@ -121,6 +147,7 @@ export default function DataInputPage() {
             </p>
             <button
               onClick={() => setSkipTime(true)}
+              disabled={isLoading}
               className="mt-2 text-sm text-[#9ca3af] underline transition-colors hover:text-[#d4af37]"
             >
               Не знаю
@@ -135,6 +162,7 @@ export default function DataInputPage() {
             </p>
             <button
               onClick={() => setSkipTime(false)}
+              disabled={isLoading}
               className="mt-2 text-sm text-[#d4af37] underline transition-colors hover:text-[#d4af37]/80"
             >
               Добавить время
@@ -150,21 +178,29 @@ export default function DataInputPage() {
             placeholder="Москва"
             value={birthCity}
             onChange={(e) => setBirthCity(e.target.value)}
+            disabled={isLoading}
             className="h-14 rounded-xl border-2 border-[#6b7280] bg-[#1a1a1a] px-4 text-[#e5e5e5] transition-all placeholder:text-[#6b7280] focus:border-[#d4af37] focus-visible:ring-0"
           />
           <p className="mt-2 text-sm text-[#9ca3af]">
             Для расчёта геолокационных паттернов
           </p>
         </div>
+
+        {/* Ошибка */}
+        {error && (
+          <div className="rounded-xl border border-[#dc2626] bg-[#dc2626]/10 p-4">
+            <p className="text-sm text-[#dc2626]">{error}</p>
+          </div>
+        )}
       </div>
 
       {/* Submit Button */}
       <Button
         onClick={handleSubmit}
-        disabled={!isValid}
+        disabled={!isValid || isLoading}
         className="mt-8 w-full rounded-xl bg-[#d4af37] py-6 text-black shadow-lg shadow-[#d4af37]/30 transition-transform hover:scale-[1.02] hover:bg-[#d4af37] disabled:opacity-50 disabled:hover:scale-100"
       >
-        Далее
+        {isLoading ? 'Сохранение...' : 'Далее'}
       </Button>
     </div>
   );

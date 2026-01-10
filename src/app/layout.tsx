@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Cormorant_Garamond, Manrope } from 'next/font/google';
 import './globals.css';
+import { AuthProvider } from '@/components/providers/AuthProvider';
 
 // Подключаем шрифты
 const inter = Inter({
@@ -70,10 +71,12 @@ export default function RootLayout({
       className={`${inter.variable} ${cormorant.variable} ${manrope.variable}`}
     >
       <body className="antialiased">
-        {/* Максимальная ширина для desktop */}
-        <div className="mx-auto max-w-[430px]">
-          {children}
-        </div>
+        <AuthProvider>
+          {/* Максимальная ширина для desktop */}
+          <div className="mx-auto max-w-[430px]">
+            {children}
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

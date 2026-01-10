@@ -7,6 +7,7 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { LiquidGlassTabBar } from '@/components/ui/LiquidGlassTabBar';
+import { analysisApi } from '@/lib/api';
 
 // Категории запросов
 const categories = [
@@ -27,21 +28,53 @@ export default function NewRequestPage() {
   
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [text, setText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   // Валидация: категория выбрана и текст >= 30 символов
   const isValid = selectedCategory && text.length >= 30;
   const charCount = text.length;
 
-  const handleSubmit = () => {
-    if (isValid) {
-      // TODO: Отправка запроса на бэкенд
-      console.log({
+  const handleSubmit = async () => {
+    if (!isValid || !selectedCategory) return;
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      // Отправляем запрос на бэкенд
+      const result = await analysisApi.createAnalysis({
         category: selectedCategory,
         question: text,
       });
-      
+
+      console.log('✅ Analysis created:', result);
+
+      // Сохраняем результат для показа на следующей странице
+      sessionStorage.setItem('current_analysis', JSON.stringify(result));
+
       // Переход на экран результата анализа
-      router.push('/analysis-result');
+      router.push(`/analysis-result?id=${result.id}`);
+    } catch (err: any) {
+      console.error('❌ Create analysis error:', err);
+      
+      // Обработка специфичных ошибок
+      if (err.response?.status === 400) {
+        const detail = err.response?.data?.detail || '';
+        if (detail.includes('birth data')) {
+          setError('Пожалуйста, заполните данные о рождении в профиле.');
+        } else if (detail.includes('archetype test')) {
+          setError('Пожалуйста, пройдите тест на архетипы.');
+        } else if (detail.includes('30 characters')) {
+          setError('Вопрос должен быть минимум 30 символов.');
+        } else {
+          setError(detail);
+        }
+      } else {
+        setError('Ошибка при создании разбора. Попробуйте ещё раз.');
+      }
+      
+      setIsSubmitting(false);
     }
   };
 
@@ -57,7 +90,8 @@ export default function NewRequestPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.back()}
-            className="text-[#9ca3af] transition-colors hover:text-[#d4af37]"
+            disabled={isSubmitting}
+            className="text-[#9ca3af] transition-colors hover:text-[#d4af37] disabled:opacity-50"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -83,16 +117,17 @@ export default function NewRequestPage() {
             <motion.button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
+              disabled={isSubmitting}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, delay: 0.1 + index * 0.05 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: isSubmitting ? 1 : 1.05 }}
+              whileTap={{ scale: isSubmitting ? 1 : 0.95 }}
               className={`rounded-xl border-2 p-4 text-left transition-all ${
                 selectedCategory === category.id
                   ? 'border-[#d4af37] bg-white/10'
                   : 'border-white/10 bg-white/5 hover:border-white/20'
-              }`}
+              } ${isSubmitting ? 'cursor-not-allowed opacity-50' : ''}`}
               style={
                 selectedCategory === category.id
                   ? { boxShadow: '0 0 20px rgba(212, 175, 55, 0.3)' }
@@ -116,7 +151,8 @@ export default function NewRequestPage() {
             placeholder="Опишите ситуацию подробно..."
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="min-h-[120px] resize-y rounded-xl border-2 border-[#6b7280] bg-[#1a1a1a] px-4 py-3 text-[#e5e5e5] placeholder:text-[#6b7280] transition-all focus:border-[#d4af37] focus-visible:ring-0"
+            disabled={isSubmitting}
+            className="min-h-[120px] resize-y rounded-xl border-2 border-[#6b7280] bg-[#1a1a1a] px-4 py-3 text-[#e5e5e5] placeholder:text-[#6b7280] transition-all focus:border-[#d4af37] focus-visible:ring-0 disabled:opacity-50"
             maxLength={500}
           />
           
@@ -128,7 +164,7 @@ export default function NewRequestPage() {
                   Минимум 30 символов (ещё {30 - charCount})
                 </span>
               ) : (
-                <span>У вас 0 бесплатных разборов. 490 ₽</span>
+                <span>✓ Готово к отправке</span>
               )}
             </p>
             <span
@@ -141,6 +177,17 @@ export default function NewRequestPage() {
           </div>
         </motion.div>
 
+        {/* Error */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-xl border border-[#dc2626] bg-[#dc2626]/10 p-4"
+          >
+            <p className="text-sm text-[#dc2626]">{error}</p>
+          </motion.div>
+        )}
+
         {/* Кнопка отправки */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -149,13 +196,38 @@ export default function NewRequestPage() {
         >
           <Button
             onClick={handleSubmit}
-            disabled={!isValid}
+            disabled={!isValid || isSubmitting}
             className="w-full rounded-xl bg-[#d4af37] py-6 text-black shadow-lg shadow-[#d4af37]/30 transition-transform hover:scale-[1.02] hover:bg-[#d4af37] disabled:opacity-50 disabled:hover:scale-100"
           >
-            <Plus className="mr-2 h-5 w-5" />
-            Получить разбор
+            {isSubmitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
+                Создаём разбор...
+              </span>
+            ) : (
+              <>
+                <Plus className="mr-2 h-5 w-5" />
+                Получить разбор
+              </>
+            )}
           </Button>
         </motion.div>
+
+        {/* Info */}
+        {isSubmitting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4"
+          >
+            <p className="text-center text-sm text-[#9ca3af]">
+              ⏳ Обрабатываем ваш запрос через AI...
+              <br />
+              Это может занять до 30 секунд
+            </p>
+          </motion.div>
+        )}
       </div>
 
       {/* Tab Bar */}

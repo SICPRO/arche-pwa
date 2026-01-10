@@ -1,76 +1,134 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
+import { testApi } from '@/lib/api';
 
-// Моковые вопросы (в проде будут с бэкенда)
-const MOCK_QUESTIONS = [
-  'Я часто чувствую потребность в переменах и новых впечатлениях',
-  'Мне важно чувствовать стабильность и предсказуемость в жизни',
-  'Я предпочитаю контролировать ситуацию, а не плыть по течению',
-  'Я легко адаптируюсь к новым обстоятельствам и условиям',
-  'Я склонен глубоко анализировать свои эмоции и переживания',
-  'Мне важно помогать другим людям и заботиться о них',
-  'Я часто берусь за несколько дел одновременно',
-  'Мне нравится планировать всё заранее до мелочей',
-  'Я предпочитаю действовать, а не размышлять',
-  'Мне важно быть признанным и оценённым окружающими',
-  'Я легко выражаю свои чувства и эмоции',
-  'Мне комфортно в одиночестве',
-  // ... добавим ещё 24 вопроса (всего 36)
-  'Я склонен к риску и экспериментам',
-  'Мне важна гармония в отношениях',
-  'Я часто ищу смысл в происходящем',
-  'Я предпочитаю следовать правилам и нормам',
-  'Мне нравится быть в центре внимания',
-  'Я легко доверяю людям',
-  'Мне важно быть независимым',
-  'Я часто сомневаюсь в своих решениях',
-  'Мне нравится помогать другим решать проблемы',
-  'Я предпочитаю теорию практике',
-  'Мне важно быть справедливым',
-  'Я легко меняю своё мнение',
-  'Мне нравится создавать что-то новое',
-  'Я предпочитаю работать в команде',
-  'Мне важна свобода выбора',
-  'Я часто откладываю дела на потом',
-  'Мне нравится учиться новому',
-  'Я предпочитаю конкретику абстракции',
-  'Мне важно быть честным',
-  'Я легко прощаю обиды',
-  'Мне нравится конкурировать',
-  'Я предпочитаю избегать конфликтов',
-  'Мне важно найти своё предназначение',
-  'Я легко принимаю изменения в жизни',
-];
+// Интерфейс для вопроса
+interface Question {
+  id: number;
+  archetype: string;
+  text: string;
+}
 
 export default function PersonalityTestPage() {
+  const router = useRouter();
+  
+  // Состояния
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<number[]>(new Array(36).fill(3));
+  const [answers, setAnswers] = useState<Record<number, number>>({});
   const [direction, setDirection] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const totalQuestions = MOCK_QUESTIONS.length;
-  const progress = ((currentQuestion + 1) / totalQuestions) * 100;
+  // Загружаем вопросы при монтировании
+  useEffect(() => {
+    loadQuestions();
+  }, []);
 
-  const handleNext = () => {
+  const loadQuestions = async () => {
+    try {
+      const data = await testApi.getQuestions();
+      setQuestions(data);
+      
+      // Инициализируем ответы (все по 3 - средний балл)
+      const initialAnswers: Record<number, number> = {};
+      data.forEach((q) => {
+        initialAnswers[q.id] = 3;
+      });
+      setAnswers(initialAnswers);
+      
+      setIsLoading(false);
+      console.log('✅ Questions loaded:', data.length);
+    } catch (err: any) {
+      console.error('❌ Failed to load questions:', err);
+      setError('Не удалось загрузить вопросы. Попробуйте обновить страницу.');
+      setIsLoading(false);
+    }
+  };
+
+  const totalQuestions = questions.length;
+  const progress = totalQuestions > 0 ? ((currentQuestion + 1) / totalQuestions) * 100 : 0;
+
+  const handleNext = async () => {
     if (currentQuestion < totalQuestions - 1) {
       setDirection(1);
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      // Последний вопрос - переходим к результатам
-      console.log('Test completed! Answers:', answers);
-      window.location.href = '/trial-result';
+      // Последний вопрос - отправляем на бэкенд
+      await handleSubmit();
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentQuestion > 0) {
+      setDirection(-1);
+      setCurrentQuestion(currentQuestion - 1);
     }
   };
 
   const handleSliderChange = (value: number[]) => {
-    const newAnswers = [...answers];
-    newAnswers[currentQuestion] = value[0];
-    setAnswers(newAnswers);
+    setAnswers({
+      ...answers,
+      [questions[currentQuestion].id]: value[0],
+    });
   };
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      // Отправляем ответы на бэкенд
+      const result = await testApi.submitTest(answers);
+      
+      console.log('✅ Test submitted:', result);
+
+      // Сохраняем результат в sessionStorage для trial-result
+      sessionStorage.setItem('test_result', JSON.stringify(result));
+
+      // Переход на экран с результатом
+      router.push('/trial-result');
+    } catch (err: any) {
+      console.error('❌ Submit test error:', err);
+      setError(err.response?.data?.detail || 'Ошибка при отправке теста. Попробуйте ещё раз.');
+      setIsSubmitting(false);
+    }
+  };
+
+  // Лоадер
+  if (isLoading) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0a] px-6">
+        <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[#d4af37] border-t-transparent"></div>
+        <p className="text-[#9ca3af]">Загрузка теста...</p>
+      </div>
+    );
+  }
+
+  // Ошибка загрузки
+  if (error && questions.length === 0) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-[#0a0a0a] px-6">
+        <div className="mb-4 text-4xl">⚠️</div>
+        <p className="mb-4 text-center text-[#dc2626]">{error}</p>
+        <Button
+          onClick={() => window.location.reload()}
+          className="rounded-xl bg-[#d4af37] px-8 py-3 text-black hover:bg-[#d4af37]"
+        >
+          Обновить страницу
+        </Button>
+      </div>
+    );
+  }
+
+  const currentQuestionData = questions[currentQuestion];
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0a0a0a] px-6 py-8">
@@ -102,12 +160,12 @@ export default function PersonalityTestPage() {
               style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.2)' }}
             >
               <p className="mb-12 text-center font-serif text-2xl leading-relaxed text-[#e5e5e5]">
-                {MOCK_QUESTIONS[currentQuestion]}
+                {currentQuestionData?.text || 'Загрузка...'}
               </p>
 
               <div className="space-y-6">
                 <Slider
-                  value={[answers[currentQuestion]]}
+                  value={[answers[currentQuestionData?.id] || 3]}
                   onValueChange={handleSliderChange}
                   min={1}
                   max={5}
@@ -125,14 +183,19 @@ export default function PersonalityTestPage() {
           </motion.div>
         </AnimatePresence>
 
+        {/* Error */}
+        {error && (
+          <div className="mb-4 rounded-xl border border-[#dc2626] bg-[#dc2626]/10 p-4">
+            <p className="text-sm text-[#dc2626]">{error}</p>
+          </div>
+        )}
+
         {/* Navigation Buttons */}
         <div className="flex gap-4">
           {currentQuestion > 0 && (
             <Button
-              onClick={() => {
-                setDirection(-1);
-                setCurrentQuestion(currentQuestion - 1);
-              }}
+              onClick={handlePrev}
+              disabled={isSubmitting}
               variant="outline"
               className="flex-1 rounded-xl border-2 border-[#6b7280] bg-transparent py-6 text-[#9ca3af] hover:border-[#d4af37] hover:bg-[#d4af37]/10 hover:text-[#d4af37]"
             >
@@ -142,9 +205,19 @@ export default function PersonalityTestPage() {
 
           <Button
             onClick={handleNext}
-            className="flex-1 rounded-xl bg-[#d4af37] py-6 text-black shadow-lg shadow-[#d4af37]/30 transition-transform hover:scale-[1.02] hover:bg-[#d4af37]"
+            disabled={isSubmitting}
+            className="flex-1 rounded-xl bg-[#d4af37] py-6 text-black shadow-lg shadow-[#d4af37]/30 transition-transform hover:scale-[1.02] hover:bg-[#d4af37] disabled:opacity-50"
           >
-            {currentQuestion < totalQuestions - 1 ? 'Далее' : 'Завершить'}
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
+                Обработка...
+              </span>
+            ) : currentQuestion < totalQuestions - 1 ? (
+              'Далее'
+            ) : (
+              'Завершить'
+            )}
           </Button>
         </div>
       </div>
